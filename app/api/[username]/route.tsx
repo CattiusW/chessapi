@@ -3,6 +3,7 @@ import { ImageResponse } from '@vercel/og';
 
 // This is required for Next.js to deploy this on the Edge runtime
 export const runtime = 'edge';
+export const dynamic = 'force-dynamic';
 
 export async function GET(request: Request, { params }: { params: { username: string } }) {
   const username = params.username;
