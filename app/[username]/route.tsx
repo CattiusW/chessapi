@@ -1,4 +1,3 @@
-// app/api/[username]/route.tsx
 import { ImageResponse } from '@vercel/og';
 
 // This is required for Next.js to deploy this on the Edge runtime
@@ -11,6 +10,22 @@ export async function GET(request: Request, { params }: { params: { username: st
   if (!username) {
     return new Response('Username not specified', { status: 400 });
   }
+
+  // --- Start of new logic to get size parameters ---
+  const { searchParams } = new URL(request.url);
+  
+  // Get width and height from search parameters, parse them as numbers,
+  // and provide default values of 600 and 250 if they are missing or invalid.
+  const imageWidth = parseInt(searchParams.get('width') || '600', 10);
+  const imageHeight = parseInt(searchParams.get('height') || '250', 10);
+
+  // Define max size constraints if necessary (optional, but good practice)
+  const MAX_WIDTH = 1200;
+  const MAX_HEIGHT = 600;
+
+  const width = Math.min(imageWidth, MAX_WIDTH);
+  const height = Math.min(imageHeight, MAX_HEIGHT);
+  // --- End of new logic ---
 
   try {
     // Fetch profile and stats data from the Chess.com API
@@ -25,14 +40,14 @@ export async function GET(request: Request, { params }: { params: { username: st
     ]);
 
     // Handle cases where the user does not exist
-    if (profileData.code === 0 || statsData.code === 0) {
-      return new Response(`User '${username}' not found`, { status: 404 });
+    if (!profileRes.ok || !statsRes.ok || profileData.code === 0 || statsData.code === 0) {
+      return new Response(`User '${username}' not found or API error`, { status: 404 });
     }
 
-    // Extract stats, using "N/A" as a fallback
-    const rapidRating = statsData.chess_rapid?.last.rating || 'N/A';
-    const blitzRating = statsData.chess_blitz?.last.rating || 'N/A';
-    const bulletRating = statsData.chess_bullet?.last.rating || 'N/A';
+    // Extract stats using nullish coalescing operator (??) for correct 0 value handling
+    const rapidRating = statsData.chess_rapid?.last?.rating ?? 'N/A';
+    const blitzRating = statsData.chess_blitz?.last?.rating ?? 'N/A';
+    const bulletRating = statsData.chess_bullet?.last?.rating ?? 'N/A';
     const avatarUrl = profileData.avatar || 'https://www.chess.com/bundles/web/images/user-image.svg';
 
     // Return the image response using the ImageResponse API
@@ -73,8 +88,9 @@ export async function GET(request: Request, { params }: { params: { username: st
         </div>
       ),
       {
-        width: 600,
-        height: 250,
+        // Use the dynamic width and height variables here
+        width: width,
+        height: height,
       },
     );
   } catch (error) {
