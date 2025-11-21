@@ -30,9 +30,9 @@ export async function GET(request: Request, { params }: { params: { username: st
     }
 
     // Extract stats, using "N/A" as a fallback
-    const rapidRating = statsData.rapid?.last.rating || 'N/A';
-    const blitzRating = statsData.blitz?.last.rating || 'N/A';
-    const bulletRating = statsData.bullet?.last.rating || 'N/A';
+    const rapidRating = statsData.chess_rapid?.last.rating || 'N/A';
+    const blitzRating = statsData.chess_blitz?.last.rating || 'N/A';
+    const bulletRating = statsData.chess_bullet?.last.rating || 'N/A';
     const avatarUrl = profileData.avatar || 'https://www.chess.com/bundles/web/images/user-image.svg';
 
     // Return the image response using the ImageResponse API
