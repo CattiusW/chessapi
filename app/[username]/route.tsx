@@ -1,4 +1,5 @@
 import { ImageResponse } from '@vercel/og';
+import sharp from 'sharp';
 
 // This is required for Next.js to deploy this on the Edge runtime
 export const runtime = 'edge';
@@ -11,21 +12,15 @@ export async function GET(request: Request, { params }: { params: { username: st
     return new Response('Username not specified', { status: 400 });
   }
 
-  // --- Start of new logic to get size parameters ---
   const { searchParams } = new URL(request.url);
-  
-  // Get width and height from search parameters, parse them as numbers,
-  // and provide default values of 600 and 250 if they are missing or invalid.
-  const imageWidth = parseInt(searchParams.get('width') || '600', 10);
-  const imageHeight = parseInt(searchParams.get('height') || '250', 10);
 
-  // Define max size constraints if necessary (optional, but good practice)
+  // Parse width and height from search parameters, falling back to defaults
+  const requestedWidth = parseInt(searchParams.get('width') || '600', 10);
+  const requestedHeight = parseInt(searchParams.get('height') || '250', 10);
+
+  // Maximum size constraints
   const MAX_WIDTH = 1200;
   const MAX_HEIGHT = 600;
-
-  const width = Math.min(imageWidth, MAX_WIDTH);
-  const height = Math.min(imageHeight, MAX_HEIGHT);
-  // --- End of new logic ---
 
   try {
     // Fetch profile and stats data from the Chess.com API
@@ -39,18 +34,45 @@ export async function GET(request: Request, { params }: { params: { username: st
       statsRes.json()
     ]);
 
-    // Handle cases where the user does not exist
+    // Handle cases where the user does not exist or API request failed
     if (!profileRes.ok || !statsRes.ok || profileData.code === 0 || statsData.code === 0) {
       return new Response(`User '${username}' not found or API error`, { status: 404 });
     }
 
-    // Extract stats using nullish coalescing operator (??) for correct 0 value handling
+    // Extract stats using nullish coalescing operator (??)
     const rapidRating = statsData.chess_rapid?.last?.rating ?? 'N/A';
     const blitzRating = statsData.chess_blitz?.last?.rating ?? 'N/A';
     const bulletRating = statsData.chess_bullet?.last?.rating ?? 'N/A';
     const avatarUrl = profileData.avatar || 'https://www.chess.com/bundles/web/images/user-image.svg';
 
-    // Return the image response using the ImageResponse API
+    // --- Dynamic Resizing Logic ---
+    let finalWidth = Math.min(requestedWidth, MAX_WIDTH);
+    let finalHeight = Math.min(requestedHeight, MAX_HEIGHT);
+    const originalWidth = 600; // Original component width
+    const originalHeight = 250; // Original component height
+
+    // If both are provided, calculate which one to use based on aspect ratio
+    if (requestedWidth && requestedHeight) {
+      const originalAspect = originalWidth / originalHeight;
+      const requestedAspect = requestedWidth / requestedHeight;
+
+      if (requestedAspect > originalAspect) {
+        // Requested is wider, scale based on height
+        finalWidth = Math.round(requestedHeight * originalAspect);
+      } else {
+        // Requested is taller, scale based on width
+        finalHeight = Math.round(requestedWidth / originalAspect);
+      }
+    } else if (requestedWidth) {
+      // Scale based on provided width only
+      finalHeight = Math.round(requestedWidth / (originalWidth / originalHeight));
+    } else if (requestedHeight) {
+      // Scale based on provided height only
+      finalWidth = Math.round(requestedHeight * (originalWidth / originalHeight));
+    }
+    // --- End Dynamic Resizing Logic ---
+
+    // Return the image response
     return new ImageResponse(
       (
         <div
@@ -66,6 +88,7 @@ export async function GET(request: Request, { params }: { params: { username: st
             fontFamily: 'sans-serif',
             padding: 32,
             boxSizing: 'border-box',
+            transform: `scale(${finalWidth / originalWidth}, ${finalHeight / originalHeight})` // Apply scale transform
           }}
         >
           <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', marginBottom: 24 }}>
@@ -88,9 +111,8 @@ export async function GET(request: Request, { params }: { params: { username: st
         </div>
       ),
       {
-        // Use the dynamic width and height variables here
-        width: width,
-        height: height,
+        width: finalWidth,
+        height: finalHeight,
       },
     );
   } catch (error) {
